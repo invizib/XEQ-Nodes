@@ -1,6 +1,7 @@
 # ⚠️ NOTE: XEQ Testnet Only
 
-> **This script and default settings are intended for XEQ Testnet use.**
+> **This script and default settings are intended for Equilibria Testnet use.**
+> This is a work in progress, I'll try to update for each phase of the testnet.
 > Change port ranges or Docker image if you use it for another network.
 
 # Start-CreateNodes
