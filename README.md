@@ -8,8 +8,6 @@
 
 This is a small PowerShell script. It helps you make many folders called "nodes" and can show or run Docker commands to start small programs (containers).
 
-Think of it like a helper that: creates a folder for each toy, gives each toy two numbered ports, and can start the toy if you ask it to.
-
 What it does:
 - Makes folders for each node and a data folder inside each.
 - Shows the Docker command it would run (preview), or actually runs it if you say `-Execute`.
