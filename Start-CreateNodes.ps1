@@ -20,6 +20,11 @@
 # Example invocation (uncomment to use):
 # Start-CreateNodes -StartAt 1 -ToCreate 3 -PortStartAt 18150 -Prefix "Node" -Execute
 
+# Script-level constants: allowed host port range for this Docker image.
+# Change these values here if you use a different image exposing another range.
+$Script:MinAllowedPort = 18080
+$Script:MaxAllowedPort = 18200
+
 function Test-PortAvailable {
     [CmdletBinding()]
     param(
@@ -122,8 +127,37 @@ function Start-CreateNodes {
         # Basic sanity checks
         if ($PortStartAt -gt 65534) { throw "PortStartAt must allow two ports per node (max 65534)." }
 
+        # Enforce Docker image port exposure limits using script-level constants
+        $MinAllowedPort = $Script:MinAllowedPort
+        $MaxAllowedPort = $Script:MaxAllowedPort
+
+        # Calculate the last host port that would be used by the final node
+        $lastPort = $PortStartAt + (($ToCreate - 1) * 2) + 1
+
+        # Automatic fallback behavior:
+        # - If PortStartAt is below MinAllowedPort, bump it to MinAllowedPort and warn.
+        # - If the requested number of nodes would exceed MaxAllowedPort, reduce ToCreate to fit.
+        if ($PortStartAt -lt $MinAllowedPort) {
+            Write-Warning "PortStartAt $PortStartAt is below minimum allowed port $MinAllowedPort. Adjusting to $MinAllowedPort."
+            $PortStartAt = $MinAllowedPort
+            $lastPort = $PortStartAt + (($ToCreate - 1) * 2) + 1
+        }
+
+        $allowedNodes = [math]::Floor((($MaxAllowedPort - $PortStartAt + 1) / 2))
+        if ($allowedNodes -lt 1) {
+            throw "No available ports in range $MinAllowedPort-$MaxAllowedPort for the given PortStartAt=$PortStartAt. Adjust PortStartAt or change the allowed port constants."
+        }
+
+        if ($ToCreate -gt $allowedNodes) {
+            Write-Warning "Requested ToCreate=$ToCreate requires $($ToCreate*2) ports but only $($allowedNodes*2) ports are available starting at $PortStartAt within $MinAllowedPort-$MaxAllowedPort."
+            Write-Warning "Automatically reducing ToCreate to $allowedNodes to fit the allowed port range."
+            $ToCreate = $allowedNodes
+            # Recompute lastPort after reducing ToCreate
+            $lastPort = $PortStartAt + (($ToCreate - 1) * 2) + 1
+        }
+
         $currentPath = (Get-Location).ProviderPath
-        $dataRoot = Join-Path -Path $currentPath -ChildPath "data"
+        $dataRoot = Join-Path -Path $currentPath -ChildPath "nodes-data"
 
         if (-not $DryRun) {
             if (-not (Test-Path -Path $dataRoot)) {
@@ -153,12 +187,11 @@ function Start-CreateNodes {
                 }
             }
 
-            # Create node folder and data volume folder (skip on DryRun)
+            # Create node folder (skip on DryRun)
             if (-not $DryRun) {
                 New-Item -Path $folderPath -ItemType Directory -Force | Out-Null
-                New-Item -Path $hostDataPath -ItemType Directory -Force | Out-Null
             } else {
-                Write-Verbose "DryRun: would create $folderPath and $hostDataPath"
+                Write-Verbose "DryRun: would create $folderPath"
             }
 
             $port1 = $PortStartAt + ($i * 2)
