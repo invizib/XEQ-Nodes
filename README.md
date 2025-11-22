@@ -46,6 +46,8 @@ The PowerShell script `Start-CreateNodes.ps1` works on Windows PowerShell 5.1+ a
 
 ### Preview (dry-run):
 
+⚠️ **Remember: `-PortStartAt` must be between 18081 and 18200** (allows for two ports per node).
+
 ```powershell
 . ./Start-CreateNodes.ps1
 Test-CreateNodesPreview -StartAt 1 -ToCreate 3 -PortStartAt 18150
@@ -84,6 +86,8 @@ chmod +x start-create-nodes.sh
 
 ### Preview (dry-run):
 
+⚠️ **Remember: `--port-start-at` must be between 18081 and 18200** (allows for two ports per node).
+
 ```bash
 ./start-create-nodes.sh --start-at 1 --to-create 3 --port-start-at 18150 --dry-run
 ```
@@ -118,19 +122,33 @@ Main script file: `Start-CreateNodes.ps1`. Edit the invocation at the top of tha
 Port limits
 ----------
 
-This Docker image exposes ports only in the range 18080 through 18200. The script uses two host ports per node (see Quick tips). That means the combination of `-PortStartAt` and `-ToCreate` must fit inside that range.
+**⚠️ Critical: This Docker image exposes ports only in the range 18081–18200.**
 
-Automatic fallback
-------------------
+The script uses **two host ports per node**. That means:
+- `-PortStartAt` (or `--port-start-at`) must be **between 18081 and 18200**.
+- Each node requires 2 consecutive ports. For example:
+  - Node 1 starting at 18150 uses ports 18150, 18151
+  - Node 2 starting at 18150 uses ports 18152, 18153
+  - Node 3 starting at 18150 uses ports 18154, 18155
 
-The script will automatically try to fit your request into the allowed port range:
+**If your chosen `-PortStartAt` and `-ToCreate` would exceed port 18200, the script automatically reduces `-ToCreate` to fit and warns you.**
 
-- If `-PortStartAt` is below the allowed minimum the script will bump it up to the minimum and warn you.
-- If your requested `-ToCreate` would require more ports than are available starting at `-PortStartAt`, the script will reduce `ToCreate` automatically to the largest number that fits and warn you.
+Automatic fallback behavior
+----------------------------
 
-Examples:
-- To create 5 nodes you need 10 ports. The highest allowed starting port for `-ToCreate 5` is `18200 - ((5-1)*2) - 1 = 18191`.
-- If your requested ports fall outside 18080..18200 the script will adjust `PortStartAt` or reduce `ToCreate` so the operation can proceed safely.
+The script automatically adjusts your input to fit the allowed port range (18081–18200):
+
+**If `-PortStartAt` is too low:**
+- Below 18081 → Script bumps to 18081 and warns you.
+
+**If `-ToCreate` is too high:**
+- If your nodes would exceed port 18200 → Script reduces `-ToCreate` and warns you.
+
+**Examples:**
+- To create 5 nodes, you need 10 ports (5 × 2). The **highest safe starting port** is `18200 - 9 = 18191`.
+  - `--port-start-at 18191 --to-create 5` uses ports 18191–18200 ✓
+  - `--port-start-at 18196 --to-create 5` would need ports 18196–18205 (exceeds 18200), so script reduces to `--to-create 2`
+- Starting at 18150 with `--to-create 26` would need 52 ports → Script reduces to the maximum that fits (25 nodes).
 
 If you want the script to ignore Docker checks and proceed anyway, use `-IgnoreDockerChecks` (use with caution).
 
