@@ -15,10 +15,72 @@
   (executes docker run and recreates folders if necessary)
 #>
 
+
+
 # Example invocation (uncomment to use):
 # Start-CreateNodes -StartAt 1 -ToCreate 3 -PortStartAt 18150 -Prefix "Node" -Execute
 
-Start-CreateNodes -StartAt 1 -ToCreate 5 -PortStartAt 18150 -Execute
+function Test-PortAvailable {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateRange(1, 65535)]
+        [int]$Port
+    )
+
+    try {
+        $addr = [System.Net.IPAddress]::Loopback
+        $listener = [System.Net.Sockets.TcpListener]::new($addr, $Port)
+        $listener.Start()
+        $listener.Stop()
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-PortPublishedByDocker {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateRange(1, 65535)]
+        [int]$Port
+    )
+
+    try {
+        $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+        if (-not $dockerCmd) {
+            return [pscustomobject]@{ Published = $false; Error = 'Docker CLI not found in PATH' }
+        }
+
+        $psOutput = & docker ps -q 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $err = $psOutput -join "`n"
+            return [pscustomobject]@{ Published = $false; Error = "docker ps failed: $err" }
+        }
+
+        $containerIds = $psOutput | Where-Object { $_ -ne '' }
+        if (-not $containerIds) { return [pscustomobject]@{ Published = $false; Error = $null } }
+
+        foreach ($id in $containerIds) {
+            $portOutput = & docker port $id 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                # If docker port fails for this container, capture but keep checking others
+                continue
+            }
+            if ($portOutput -and ($portOutput -match ":$Port\b")) {
+                return [pscustomobject]@{ Published = $true; Error = $null }
+            }
+        }
+
+        return [pscustomobject]@{ Published = $false; Error = $null }
+    }
+    catch {
+        $err = $_.Exception.Message
+        return [pscustomobject]@{ Published = $false; Error = "Exception while checking Docker ports: $err" }
+    }
+}
 
 function Start-CreateNodes {
     [CmdletBinding()]
@@ -51,6 +113,9 @@ function Start-CreateNodes {
 
         [Parameter(Mandatory=$false, HelpMessage="If set, the script will not modify the filesystem; perform a dry-run.")]
         [Switch]$DryRun
+        ,
+        [Parameter(Mandatory=$false, HelpMessage="If set, ignore Docker CLI/daemon errors and proceed anyway.")]
+        [Switch]$IgnoreDockerChecks
     )
 
     try {
@@ -99,6 +164,60 @@ function Start-CreateNodes {
             $port1 = $PortStartAt + ($i * 2)
             $port2 = $port1 + 1
 
+            # Verify host ports are available (try binding to loopback) and not already
+            # published by another Docker container. This detects local and Docker-level conflicts.
+            $port1Available = Test-PortAvailable -Port $port1
+            $port2Available = Test-PortAvailable -Port $port2
+
+            $port1PublishedRes = Test-PortPublishedByDocker -Port $port1
+            $port2PublishedRes = Test-PortPublishedByDocker -Port $port2
+
+            # If Docker checks returned errors (docker CLI missing, permission or daemon errors), surface them.
+            foreach ($res in @($port1PublishedRes, $port2PublishedRes)) {
+                if ($res -and $res.Error) {
+                    Write-Error "Docker check error: $($res.Error)"
+                    if ($IgnoreDockerChecks) {
+                        Write-Warning "Ignoring Docker check errors due to -IgnoreDockerChecks. Published-port detection unavailable: $($res.Error)"
+                        # if ignoring, allow execution to continue but treat Published as $false
+                        continue
+                    }
+
+                    # Abort only when actually executing containers. For DryRun/preview we
+                    # should not abort — allow local port checks to be shown.
+                    if ($Execute -and -not $DryRun) {
+                        Write-Error "Docker checks failed and -IgnoreDockerChecks not set; aborting run."
+                        return
+                    } else {
+                        Write-Warning "Preview: Docker check error; published-port detection unavailable: $($res.Error)"
+                        # In preview/dry-run mode, continue to the rest of the checks so the user
+                        # can see local port availability and the generated command.
+                        continue
+                    }
+                }
+            }
+
+            $port1Published = $port1PublishedRes.Published
+            $port2Published = $port2PublishedRes.Published
+
+            $conflictDetails = @()
+            if (-not $port1Available) { $conflictDetails += "$port1 (bound locally)" }
+            if ($port1Published)    { $conflictDetails += "$port1 (published by Docker)" }
+            if (-not $port2Available) { $conflictDetails += "$port2 (bound locally)" }
+            if ($port2Published)    { $conflictDetails += "$port2 (published by Docker)" }
+
+            if ($conflictDetails.Count -gt 0) {
+                $conflictList = $conflictDetails -join ', '
+                Write-Warning "Port conflict for node $nodeName`: $conflictList"
+
+                if ($Execute -and -not $DryRun) {
+                    Write-Error "Cannot create container $nodeName`: $conflictList. Skipping."
+                    continue
+                } else {
+                    Write-Host "DRY RUN / preview: port conflict for $nodeName ($conflictList). Command will be shown but container won't be created."
+                    # Continue to build and print the command so the preview shows what would be run.
+                }
+            }
+
             $dockerArgs = @(
                 'run', '-dit',
                 '--name', $nodeName,
@@ -133,10 +252,10 @@ function Start-CreateNodes {
             }
         }
 
-        Write-Host "Create-Nodes completed."
+        Write-Host "Create Nodes completed."
     }
     catch {
-        Write-Error "Create-Nodes failed: $_"
+        Write-Error "Create Nodes failed: $_"
         throw
     }
 }
@@ -164,7 +283,10 @@ function Test-CreateNodesPreview {
         [string]$DockerPackage = "glutinous165/equilibria-node:latest",
 
         [Parameter()]
-        [Switch]$Overwrite
+        [Switch]$Overwrite,
+
+        [Parameter()]
+        [Switch]$IgnoreDockerChecks
     )
 
     Write-Host "=== Test: Create nodes preview ==="
@@ -180,6 +302,7 @@ function Test-CreateNodesPreview {
         DryRun        = $true
     }
     if ($Overwrite) { $splat.Overwrite = $true }
+    if ($IgnoreDockerChecks) { $splat.IgnoreDockerChecks = $true }
 
     # Call Start-CreateNodes in dry-run mode (no filesystem changes, no docker)
     Start-CreateNodes @splat
