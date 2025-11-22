@@ -22,7 +22,7 @@
 
 # Script-level constants: allowed host port range for this Docker image.
 # Change these values here if you use a different image exposing another range.
-$Script:MinAllowedPort = 18080
+$Script:MinAllowedPort = 18081
 $Script:MaxAllowedPort = 18200
 
 function Test-PortAvailable {

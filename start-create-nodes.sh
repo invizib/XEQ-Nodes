@@ -18,7 +18,7 @@ DRY_RUN=0
 IGNORE_DOCKER_CHECKS=0
 
 # Port limits for the Docker image (change if needed)
-MIN_ALLOWED_PORT=18080
+MIN_ALLOWED_PORT=18081
 MAX_ALLOWED_PORT=18200
 
 usage() {
@@ -80,6 +80,8 @@ START_AT=${START_AT}
 TO_CREATE=${TO_CREATE}
 PORT_START_AT=${PORT_START_AT}
 
+# Ensure PORT_START_AT is treated as an integer (coerce strings like "18150\r")
+PORT_START_AT=$((PORT_START_AT))
 if (( PORT_START_AT > 65534 )); then
   echo "Error: PortStartAt must allow two ports per node (max 65534)." >&2
   exit 2
@@ -188,6 +190,10 @@ for (( i=0; i<TO_CREATE; i++ )); do
   port1=$(( PORT_START_AT + (i * 2) ))
   port2=$(( port1 + 1 ))
 
+  # Debug: show computed ports in dry-run to help diagnose allocation issues
+  if (( DRY_RUN == 1 )); then
+    echo "DEBUG: node=$nodeName computed ports: $port1, $port2"
+  fi
   # Check local availability
   check_port_available "$port1"
   p1_local_ok=$?
