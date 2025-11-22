@@ -1,4 +1,4 @@
-# Start-CreateNodes
+# Start-CreateNodes - TESTNET
 
 This is a small PowerShell script. It helps you make many folders called "nodes" and can show or run Docker commands to start small programs (containers).
 
