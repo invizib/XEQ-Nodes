@@ -143,7 +143,7 @@ If you use a different Docker image that exposes a different port range, you can
 
 ```powershell
 # Script-level constants: allowed host port range for this Docker image.
-$Script:MinAllowedPort = 18080
+$Script:MinAllowedPort = 18081
 $Script:MaxAllowedPort = 18200
 ```
 
