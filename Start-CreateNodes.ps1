@@ -157,21 +157,12 @@ function Start-CreateNodes {
         }
 
         $currentPath = (Get-Location).ProviderPath
-        $dataRoot = Join-Path -Path $currentPath -ChildPath "nodes-data"
-
-        if (-not $DryRun) {
-            if (-not (Test-Path -Path $dataRoot)) {
-                New-Item -Path $dataRoot -ItemType Directory -Force | Out-Null
-            }
-        } else {
-            Write-Verbose "DryRun: would ensure data root exists at $dataRoot"
-        }
 
         for ($i = 0; $i -lt $ToCreate; $i++) {
             $nodeNumber = $StartAt + $i
             $nodeName = "{0}{1}" -f $Prefix, $nodeNumber
             $folderPath = Join-Path -Path $currentPath -ChildPath $nodeName
-            $hostDataPath = Join-Path -Path $dataRoot -ChildPath $nodeName
+            $hostDataPath = Join-Path -Path $folderPath -ChildPath "data"
 
             if (Test-Path -Path $folderPath) {
                 if ($Overwrite) {
