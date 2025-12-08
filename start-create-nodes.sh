@@ -11,7 +11,7 @@ START_AT=1
 TO_CREATE=1
 PORT_START_AT=18150
 PREFIX="Node"
-DOCKER_PACKAGE="glutinous165/equilibria-node:latest"
+DOCKER_PACKAGE="ghcr.io/equilibriahorizon/equilibria-node:latest"
 EXECUTE=0
 OVERWRITE=0
 DRY_RUN=0
@@ -257,7 +257,7 @@ for (( i=0; i<TO_CREATE; i++ )); do
     fi
   fi
 
-  dockerCmd=(docker run -dit --name "$nodeName" --restart unless-stopped -p "$port1:$port1" -p "$port2:$port2" -v "$folderPath:/data" "$DOCKER_PACKAGE" --testnet --data-dir=/data "--p2p-bind-port=$port1" "--rpc-bind-port=$port2" --add-exclusive-node=84.247.143.210:18080 --log-level=1)
+  dockerCmd=(docker run -dit --name "$nodeName" --restart unless-stopped -p "$port1:$port1" -p "$port2:$port2" -v "$folderPath:/data" "$DOCKER_PACKAGE" --testnet --data-dir=/data "--p2p-bind-port=$port1" "--rpc-bind-port=$port2" --add-exclusive-node=84.247.143.210:18080 --log-level=3)
 
   if (( EXECUTE == 1 )); then
     echo "Creating Docker container: $nodeName (ports $port1,$port2) ..."
