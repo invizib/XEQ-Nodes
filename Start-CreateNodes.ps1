@@ -108,7 +108,7 @@ function Start-CreateNodes {
 
         [Parameter(Mandatory=$false, Position=4, HelpMessage="Docker image to run.")]
         [ValidateNotNullOrEmpty()]
-        [string]$DockerPackage = "glutinous165/equilibria-node:latest",
+        [string]$DockerPackage = "ghcr.io/equilibriahorizon/equilibria-node:latest",
 
         [Parameter(Mandatory=$false, HelpMessage="If set, the script will actually run docker; otherwise it will print the command.")]
         [Switch]$Execute,
@@ -255,7 +255,7 @@ function Start-CreateNodes {
                 "--p2p-bind-port=$port1",
                 "--rpc-bind-port=$port2",
                 '--add-exclusive-node=84.247.143.210:18080',
-                '--log-level=1'
+                '--log-level=3'
             )
 
             if ($Execute) {
